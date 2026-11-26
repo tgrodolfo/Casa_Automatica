@@ -15,6 +15,11 @@ A **Casa Automática** é uma aplicação de automação residencial que control
 - Listar e controlar luzes por ambiente (ligar/desligar, toggle, ligar/apagar tudo)
 - Listar e controlar janelas por ambiente (aberto/fechado, toggle, abrir/fechar tudo)
 - Exibir se está chovendo (estado enviado pelo ESP32 via API)
+- Histórico de momentos de chuva (início e fim com data/hora)
+- Registro de entradas pela porta RFID (data/hora; fila offline no ESP)
+- Tela `/logs` com calendário: clique no dia para ver chuva e entradas daquele dia
+- Tela `/cartoes` para cadastrar o nome da pessoa por UID do cartão RFID
+- Custom Skill Alexa para acender luzes, abrir/fechar janelas e portão
 - Painéis de estatísticas em tempo real
 - Notificações visuais (toast) para feedback de ações
 
@@ -88,7 +93,7 @@ Edite `application-local.properties` (arquivo gitignored) ou use variáveis de a
 **Autenticação:**
 
 - **Navegador:** login em `/login` (sessão + CSRF nos POSTs da interface).
-- **ESP32:** header `X-API-Key` com a chave do dispositivo. O ESP32 só pode `GET /api/quartos` e `POST /api/chuva`.
+- **ESP32:** header `X-API-Key` com a chave do dispositivo. Endpoints do device: `GET /api/quartos`, `GET /api/portao`, `GET /api/janelas`, `POST /api/chuva`, `POST /api/porta/entradas`.
 
 **Exposição pública:** use HTTPS (Cloudflare Tunnel ou proxy reverso). Não abra porta no roteador sem TLS na frente.
 
@@ -166,10 +171,11 @@ Exemplo — `GET /api/janelas`:
 
 ### Chuva (ESP32) — `/api/chuva`
 
-| Método | Rota           | Descrição                                      |
-|--------|----------------|------------------------------------------------|
-| GET    | `/api/chuva`   | Lê se está chovendo (interface web e ESP)      |
-| POST   | `/api/chuva`   | **ESP32 envia** leitura do sensor de chuva     |
+| Método | Rota                    | Descrição                                      |
+|--------|-------------------------|------------------------------------------------|
+| GET    | `/api/chuva`            | Lê se está chovendo (interface web e ESP)      |
+| GET    | `/api/chuva/momentos`   | Lista momentos de chuva (início/fim)           |
+| POST   | `/api/chuva`            | **ESP32 envia** leitura do sensor de chuva     |
 
 Corpo do `POST` (ESP32):
 
@@ -178,6 +184,7 @@ Corpo do `POST` (ESP32):
 ```
 
 Valores aceitos para `rain`: `yes` / `no` (também `on` / `off`).
+Ao mudar de seco→chovendo ou chovendo→seco, o Java grava o momento com data/hora (`America/Sao_Paulo`).
 
 Exemplo — `GET /api/chuva`:
 
@@ -187,6 +194,77 @@ Exemplo — `GET /api/chuva`:
   "status": "chovendo"
 }
 ```
+
+Exemplo — `GET /api/chuva/momentos`:
+
+```json
+{
+  "moments": [
+    {
+      "id": 1,
+      "inicio": "2026-11-25T14:30:00",
+      "fim": "2026-11-25T15:10:00",
+      "emAndamento": false
+    }
+  ]
+}
+```
+
+### Logs por dia — `/api/logs`
+
+| Método | Rota                 | Descrição                                      |
+|--------|----------------------|------------------------------------------------|
+| GET    | `/api/logs/calendario?ano=&mes=` | Dias do mês com registros           |
+| GET    | `/api/logs/dia?data=YYYY-MM-DD`  | Chuva + entradas daquele dia        |
+
+Na interface: `/logs` (calendário) → clique no dia → `/logs?dia=YYYY-MM-DD`.
+
+### Alexa — `/api/alexa`
+
+| Método | Rota         | Descrição                                      |
+|--------|--------------|------------------------------------------------|
+| POST   | `/api/alexa` | Endpoint HTTPS da Custom Skill Alexa           |
+
+Configure no [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask):
+
+1. Crie uma Custom Skill em português (BR) com invocation name `casa automática`.
+2. Cole o modelo de `alexa/interaction-model.pt-BR.json`.
+3. Default endpoint HTTPS: `https://lar-doce-lar.coresystemstgr.com/api/alexa` (ou o host do tunnel).
+4. Copie o Skill ID para `CASA_AUTOMATICA_ALEXA_SKILL_ID` / `casa-automatica.security.alexa-skill-id`.
+
+Exemplos de fala:
+
+- “Alexa, peça para a casa automática acender a luz da sala”
+- “Alexa, peça para a casa automática abrir as janelas”
+- “Alexa, peça para a casa automática abrir o portão”
+
+### Cartões RFID — `/api/porta/cartoes`
+
+| Método | Rota                          | Descrição                                      |
+|--------|-------------------------------|------------------------------------------------|
+| GET    | `/api/porta/cartoes`          | Lista UIDs conhecidos e nomes cadastrados      |
+| PUT    | `/api/porta/cartoes/{cardUid}`| Salva/atualiza o nome da pessoa do cartão      |
+
+Corpo do `PUT`:
+
+```json
+{ "nome": "Maria Silva" }
+```
+
+### Porta RFID — `/api/porta/entradas`
+
+| Método | Rota                   | Descrição                                              |
+|--------|------------------------|--------------------------------------------------------|
+| GET    | `/api/porta/entradas`  | Lista entradas pela porta com data/hora                |
+| POST   | `/api/porta/entradas`  | **ESP32 registra** entrada (fila offline se sem net)   |
+
+Corpo do `POST` (ESP32):
+
+```json
+{ "cardUid": "A1B2C3D4", "ocorridoEm": "2026-11-25T14:30:00", "offline": false }
+```
+
+Se `ocorridoEm` for omitido, o servidor Java registra a hora atual. Sem internet, o ESP guarda na fila local e sincroniza depois (`offline: true`).
 
 ### Documentação interativa (Swagger)
 
@@ -222,6 +300,24 @@ http://localhost:8000/swagger-ui.html
 |----------|---------|------------------------------------|
 | `rain`   | String  | `"yes"` ou `"no"`                  |
 | `status` | String  | `"chovendo"` ou `"sem chuva"`      |
+
+### Momentos de chuva (`MomentoChuva`)
+
+| Campo    | Tipo          | Descrição                                      |
+|----------|---------------|------------------------------------------------|
+| `id`     | Long          | Identificador                                  |
+| `inicio` | LocalDateTime | Quando começou (hora Java)                     |
+| `fim`    | LocalDateTime | Quando acabou (`null` se ainda chovendo)       |
+
+### Entradas pela porta (`EntradaPorta`)
+
+| Campo            | Tipo          | Descrição                                           |
+|------------------|---------------|-----------------------------------------------------|
+| `id`             | Long          | Identificador                                       |
+| `cardUid`        | String        | UID do cartão RFID                                  |
+| `ocorridoEm`     | LocalDateTime | Momento da entrada                                  |
+| `sincronizadoEm` | LocalDateTime | Quando o servidor recebeu                           |
+| `offline`        | boolean       | Veio da fila local do ESP                           |
 
 ---
 

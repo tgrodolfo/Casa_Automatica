@@ -29,7 +29,7 @@ import org.springframework.context.annotation.Configuration;
     type = SecuritySchemeType.APIKEY,
     in = SecuritySchemeIn.HEADER,
     paramName = "X-API-Key",
-    description = "Chave do ESP32. Permitido: GET /api/quartos e POST /api/chuva."
+    description = "Chave do ESP32. Permitido: GET /api/quartos, GET /api/portao, GET /api/janelas, POST /api/chuva, POST /api/porta/entradas."
 )
 public class SwaggerConfig {
 }

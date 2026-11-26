@@ -39,13 +39,52 @@ public class QuartosService {
     public void toggleLight(Long id) {
         Quartos quarto = buscarPorId(id);
         if ("on".equals(quarto.getLight())) {
-            quarto.setLight("off");
-            quarto.setStatus("apagado");
+            apagar(quarto);
         } else {
-            quarto.setLight("on");
-            quarto.setStatus("iluminado");
+            acender(quarto);
         }
-        repository.save(quarto);
+    }
+
+    public Quartos acenderPorNome(String nome) {
+        Quartos quarto = buscarPorNome(nome);
+        return acender(quarto);
+    }
+
+    public Quartos apagarPorNome(String nome) {
+        Quartos quarto = buscarPorNome(nome);
+        return apagar(quarto);
+    }
+
+    public Quartos buscarPorNome(String nome) {
+        String alvo = normalizarNome(nome);
+        return listarTodos().stream()
+            .filter(q -> normalizarNome(q.getRoom()).equals(alvo))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Ambiente não encontrado: " + nome));
+    }
+
+    private Quartos acender(Quartos quarto) {
+        quarto.setLight("on");
+        quarto.setStatus("iluminado");
+        return repository.save(quarto);
+    }
+
+    private Quartos apagar(Quartos quarto) {
+        quarto.setLight("off");
+        quarto.setStatus("apagado");
+        return repository.save(quarto);
+    }
+
+    private String normalizarNome(String nome) {
+        if (nome == null) {
+            return "";
+        }
+        return nome.trim().toLowerCase()
+            .replace("á", "a").replace("ã", "a").replace("â", "a")
+            .replace("é", "e").replace("ê", "e")
+            .replace("í", "i")
+            .replace("ó", "o").replace("ô", "o").replace("õ", "o")
+            .replace("ú", "u").replace("ç", "c");
     }
     public void setAllLight() {
         List<Quartos> quartos = listarTodos();

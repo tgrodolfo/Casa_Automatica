@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" th:href="@{/favicon.ico}" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="_csrf" th:content="${_csrf.token}" />
+    <meta name="_csrf_header" th:content="${_csrf.headerName}" />
+    <title>Casa Automática — Logs</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" th:href="@{/style.css(v=13)}" />
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">
+            <div class="logo-icon"></div>
+            <div class="logo-text">CASA<span>AUTOMÁTICA</span></div>
+        </div>
+
+        <nav class="main-nav" aria-label="Navegação principal">
+            <a class="nav-link" th:href="@{/}">Painel</a>
+            <a class="nav-link active" th:href="@{/logs}">Logs</a>
+            <a class="nav-link" th:href="@{/cartoes}">Cartões</a>
+        </nav>
+
+        <div class="header-right">
+            <div class="status-badge">
+                <div class="status-dot"></div>
+                SISTEMA ONLINE
+            </div>
+            <form th:action="@{/logout}" method="post" class="logout-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button type="submit" class="logout-btn">SAIR</button>
+            </form>
+        </div>
+    </header>
+
+    <main>
+        <section class="dashboard-section" id="section-calendar">
+            <div class="section-header row-header">
+                <div>
+                    <div class="section-title">Calendário de logs</div>
+                    <div class="section-count">Clique <span>em um dia</span></div>
+                </div>
+                <div class="section-actions calendar-nav-actions">
+                    <button type="button" class="all-toggle off" id="btn-prev-month">◀</button>
+                    <div class="calendar-month-label" id="calendar-month-label">—</div>
+                    <button type="button" class="all-toggle off" id="btn-next-month">▶</button>
+                </div>
+            </div>
+            <div class="calendar-grid" id="calendar-grid" aria-label="Calendário mensal">
+                <div class="loading">carregando calendário...</div>
+            </div>
+        </section>
+
+        <section class="dashboard-section" id="section-day" hidden>
+            <div class="section-header row-header">
+                <div>
+                    <div class="section-title">Dia selecionado</div>
+                    <div class="section-count" id="selected-day-label">—</div>
+                </div>
+                <div class="section-actions">
+                    <button type="button" class="all-toggle off" id="btn-back-calendar">VOLTAR AO CALENDÁRIO</button>
+                </div>
+            </div>
+
+            <div class="day-panels">
+                <div class="day-panel">
+                    <div class="section-title day-panel-title">Momentos de chuva</div>
+                    <div class="event-list" id="rain-moments-list">
+                        <div class="loading">selecione um dia</div>
+                    </div>
+                </div>
+                <div class="day-panel">
+                    <div class="section-title day-panel-title">Entradas pela porta</div>
+                    <div class="event-list" id="door-entries-list">
+                        <div class="loading">selecione um dia</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const API_CALENDAR = '/api/logs/calendario';
+        const API_DAY = '/api/logs/dia';
+        const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const MONTHS = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ];
+
+        let viewYear;
+        let viewMonth; // 1-12
+        let selectedDay = null;
+        let markedDays = new Set();
+
+        function pad(n) {
+            return String(n).padStart(2, '0');
+        }
+
+        function toIsoDate(y, m, d) {
+            return `${y}-${pad(m)}-${pad(d)}`;
+        }
+
+        function parseIsoDate(iso) {
+            const [y, m, d] = iso.split('-').map(Number);
+            return { y, m, d };
+        }
+
+        function formatDateTime(value) {
+            if (!value) return '—';
+            const raw = String(value);
+            const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+            if (match) {
+                const sec = match[6] || '00';
+                return `${match[3]}/${match[2]}/${match[1]} ${match[4]}:${match[5]}:${sec}`;
+            }
+            return raw.replace('T', ' ');
+        }
+
+        function formatDayLabel(iso) {
+            const { y, m, d } = parseIsoDate(iso);
+            return `${pad(d)}/${pad(m)}/${y}`;
+        }
+
+        async function apiFetch(url, options = {}) {
+            const csrfToken = document.querySelector('meta[name="_csrf"]')?.content;
+            const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content || 'X-CSRF-TOKEN';
+            const headers = { ...(options.headers || {}) };
+            const method = (options.method || 'GET').toUpperCase();
+            if (csrfToken && method !== 'GET' && method !== 'HEAD') {
+                headers[csrfHeader] = csrfToken;
+            }
+            const res = await fetch(url, { ...options, headers, credentials: 'same-origin' });
+            if (res.status === 401) {
+                window.location.href = '/login';
+                throw new Error('Não autenticado');
+            }
+            return res;
+        }
+
+        function readQueryDay() {
+            const params = new URLSearchParams(window.location.search);
+            const dia = params.get('dia');
+            if (dia && /^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+                return dia;
+            }
+            return null;
+        }
+
+        function setQueryDay(iso) {
+            const url = new URL(window.location.href);
+            if (iso) {
+                url.searchParams.set('dia', iso);
+            } else {
+                url.searchParams.delete('dia');
+            }
+            window.history.replaceState({}, '', url);
+        }
+
+        function initViewMonth() {
+            const fromQuery = readQueryDay();
+            if (fromQuery) {
+                const { y, m } = parseIsoDate(fromQuery);
+                viewYear = y;
+                viewMonth = m;
+                selectedDay = fromQuery;
+                return;
+            }
+            const now = new Date();
+            viewYear = now.getFullYear();
+            viewMonth = now.getMonth() + 1;
+        }
+
+        async function loadCalendarMarks() {
+            const res = await apiFetch(`${API_CALENDAR}?ano=${viewYear}&mes=${viewMonth}`);
+            if (!res.ok) throw new Error('calendario');
+            const data = await res.json();
+            markedDays = new Set(Array.isArray(data.days) ? data.days : []);
+        }
+
+        function renderCalendar() {
+            const label = document.getElementById('calendar-month-label');
+            label.textContent = `${MONTHS[viewMonth - 1]} ${viewYear}`;
+
+            const grid = document.getElementById('calendar-grid');
+            const first = new Date(viewYear, viewMonth - 1, 1);
+            const startWeekday = first.getDay();
+            const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+            const todayIso = (() => {
+                const n = new Date();
+                return toIsoDate(n.getFullYear(), n.getMonth() + 1, n.getDate());
+            })();
+
+            let html = WEEKDAYS.map(w => `<div class="calendar-weekday">${w}</div>`).join('');
+            for (let i = 0; i < startWeekday; i++) {
+                html += '<div class="calendar-cell empty"></div>';
+            }
+            for (let day = 1; day <= daysInMonth; day++) {
+                const iso = toIsoDate(viewYear, viewMonth, day);
+                const classes = ['calendar-cell', 'day'];
+                if (markedDays.has(iso)) classes.push('has-logs');
+                if (iso === todayIso) classes.push('today');
+                if (iso === selectedDay) classes.push('selected');
+                html += `<button type="button" class="${classes.join(' ')}" data-day="${iso}" aria-label="Abrir logs de ${formatDayLabel(iso)}">
+                    <span class="calendar-day-number">${day}</span>
+                    ${markedDays.has(iso) ? '<span class="calendar-dot" aria-hidden="true"></span>' : ''}
+                </button>`;
+            }
+            grid.innerHTML = html;
+            grid.querySelectorAll('button.day').forEach(btn => {
+                btn.addEventListener('click', () => openDay(btn.dataset.day));
+            });
+        }
+
+        async function refreshCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            try {
+                await loadCalendarMarks();
+                renderCalendar();
+            } catch {
+                grid.innerHTML = '<div class="loading">erro ao carregar calendário</div>';
+            }
+        }
+
+        function showCalendarView() {
+            document.getElementById('section-calendar').hidden = false;
+            document.getElementById('section-day').hidden = true;
+            selectedDay = null;
+            setQueryDay(null);
+            renderCalendar();
+        }
+
+        async function openDay(iso) {
+            selectedDay = iso;
+            setQueryDay(iso);
+            document.getElementById('section-calendar').hidden = true;
+            document.getElementById('section-day').hidden = false;
+            document.getElementById('selected-day-label').textContent = formatDayLabel(iso);
+            document.getElementById('rain-moments-list').innerHTML = '<div class="loading">carregando...</div>';
+            document.getElementById('door-entries-list').innerHTML = '<div class="loading">carregando...</div>';
+
+            try {
+                const res = await apiFetch(`${API_DAY}?data=${encodeURIComponent(iso)}`);
+                if (!res.ok) throw new Error('dia');
+                const data = await res.json();
+                renderRainMoments(Array.isArray(data.moments) ? data.moments : []);
+                renderDoorEntries(Array.isArray(data.entries) ? data.entries : []);
+            } catch {
+                document.getElementById('rain-moments-list').innerHTML =
+                    '<div class="loading">erro ao carregar o dia</div>';
+                document.getElementById('door-entries-list').innerHTML =
+                    '<div class="loading">erro ao carregar o dia</div>';
+            }
+        }
+
+        function renderRainMoments(moments) {
+            const list = document.getElementById('rain-moments-list');
+            if (!moments.length) {
+                list.innerHTML = '<div class="loading">nenhuma chuva neste dia</div>';
+                return;
+            }
+            list.innerHTML = moments.map(m => {
+                const ongoing = m.emAndamento || !m.fim;
+                return `
+                    <article class="event-row ${ongoing ? 'ongoing' : ''}">
+                        <div class="event-main">
+                            <div class="event-title">${ongoing ? 'Chuva em andamento' : 'Chuva registrada'}</div>
+                            <div class="event-meta">
+                                <span>Início: ${formatDateTime(m.inicio)}</span>
+                                <span>Fim: ${ongoing ? 'ainda chovendo' : formatDateTime(m.fim)}</span>
+                            </div>
+                        </div>
+                        <div class="event-badge">${ongoing ? 'AGORA' : 'ENCERRADO'}</div>
+                    </article>`;
+            }).join('');
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function renderDoorEntries(entries) {
+            const list = document.getElementById('door-entries-list');
+            if (!entries.length) {
+                list.innerHTML = '<div class="loading">nenhuma entrada neste dia</div>';
+                return;
+            }
+            list.innerHTML = entries.map(e => {
+                const uid = e.cardUid || '';
+                const nome = e.nome || '';
+                const titulo = nome ? escapeHtml(nome) : `Cartão ${escapeHtml(uid || '—')}`;
+                return `
+                <article class="event-row ${e.offline ? 'offline' : ''}">
+                    <div class="event-main">
+                        <div class="event-title">${titulo}</div>
+                        <div class="event-meta">
+                            <span>UID: ${escapeHtml(uid || '—')}</span>
+                            <span>Ocorrido: ${formatDateTime(e.ocorridoEm)}</span>
+                            <span>Sync: ${formatDateTime(e.sincronizadoEm)}</span>
+                        </div>
+                    </div>
+                    <div class="event-badge">${e.offline ? 'OFFLINE' : 'ONLINE'}</div>
+                </article>`;
+            }).join('');
+        }
+
+        document.getElementById('btn-prev-month').addEventListener('click', async () => {
+            viewMonth -= 1;
+            if (viewMonth < 1) {
+                viewMonth = 12;
+                viewYear -= 1;
+            }
+            await refreshCalendar();
+        });
+
+        document.getElementById('btn-next-month').addEventListener('click', async () => {
+            viewMonth += 1;
+            if (viewMonth > 12) {
+                viewMonth = 1;
+                viewYear += 1;
+            }
+            await refreshCalendar();
+        });
+
+        document.getElementById('btn-back-calendar').addEventListener('click', () => {
+            showCalendarView();
+        });
+
+        (async function boot() {
+            initViewMonth();
+            await refreshCalendar();
+            if (selectedDay) {
+                await openDay(selectedDay);
+            }
+        })();
+    </script>
+</body>
+
+</html>

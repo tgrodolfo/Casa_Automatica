@@ -1,0 +1,162 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "casa automática",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AcenderLuzIntent",
+          "slots": [
+            {
+              "name": "ambiente",
+              "type": "AMBIENTE"
+            }
+          ],
+          "samples": [
+            "acenda a luz da {ambiente}",
+            "acender a luz da {ambiente}",
+            "ligar a luz da {ambiente}",
+            "liga a luz da {ambiente}",
+            "acenda a {ambiente}",
+            "ligar {ambiente}"
+          ]
+        },
+        {
+          "name": "ApagarLuzIntent",
+          "slots": [
+            {
+              "name": "ambiente",
+              "type": "AMBIENTE"
+            }
+          ],
+          "samples": [
+            "apague a luz da {ambiente}",
+            "apagar a luz da {ambiente}",
+            "desligar a luz da {ambiente}",
+            "desliga a luz da {ambiente}",
+            "apague a {ambiente}"
+          ]
+        },
+        {
+          "name": "AcenderTodasLuzesIntent",
+          "slots": [],
+          "samples": [
+            "acenda todas as luzes",
+            "ligar todas as luzes",
+            "acender tudo",
+            "liga todas as luzes"
+          ]
+        },
+        {
+          "name": "ApagarTodasLuzesIntent",
+          "slots": [],
+          "samples": [
+            "apague todas as luzes",
+            "desligar todas as luzes",
+            "apagar tudo",
+            "desliga todas as luzes"
+          ]
+        },
+        {
+          "name": "AbrirJanelaIntent",
+          "slots": [
+            {
+              "name": "ambiente",
+              "type": "AMBIENTE"
+            }
+          ],
+          "samples": [
+            "abra a janela da {ambiente}",
+            "abrir a janela da {ambiente}",
+            "abre a janela da {ambiente}"
+          ]
+        },
+        {
+          "name": "FecharJanelaIntent",
+          "slots": [
+            {
+              "name": "ambiente",
+              "type": "AMBIENTE"
+            }
+          ],
+          "samples": [
+            "feche a janela da {ambiente}",
+            "fechar a janela da {ambiente}",
+            "fecha a janela da {ambiente}"
+          ]
+        },
+        {
+          "name": "AbrirTodasJanelasIntent",
+          "slots": [],
+          "samples": [
+            "abra as janelas",
+            "abrir as janelas",
+            "abre todas as janelas",
+            "abrir todas as janelas"
+          ]
+        },
+        {
+          "name": "FecharTodasJanelasIntent",
+          "slots": [],
+          "samples": [
+            "feche as janelas",
+            "fechar as janelas",
+            "fecha todas as janelas",
+            "fechar todas as janelas"
+          ]
+        },
+        {
+          "name": "AbrirPortaoIntent",
+          "slots": [],
+          "samples": [
+            "abra o portão",
+            "abrir o portão",
+            "abre o portão",
+            "abrir portão"
+          ]
+        },
+        {
+          "name": "FecharPortaoIntent",
+          "slots": [],
+          "samples": [
+            "feche o portão",
+            "fechar o portão",
+            "fecha o portão",
+            "fechar portão"
+          ]
+        },
+        {
+          "name": "AlternarPortaoIntent",
+          "slots": [],
+          "samples": [
+            "alterne o portão",
+            "alternar o portão",
+            "mude o portão"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "AMBIENTE",
+          "values": [
+            { "name": { "value": "sala", "synonyms": ["a sala"] } },
+            { "name": { "value": "quarto", "synonyms": ["o quarto"] } },
+            { "name": { "value": "cozinha", "synonyms": ["a cozinha"] } },
+            { "name": { "value": "garagem", "synonyms": ["a garagem"] } }
+          ]
+        }
+      ]
+    }
+  }
+}

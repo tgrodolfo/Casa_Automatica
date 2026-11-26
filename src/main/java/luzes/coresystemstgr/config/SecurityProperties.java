@@ -17,6 +17,12 @@ public class SecurityProperties {
     @Size(min = 32, message = "A chave do ESP32 deve ter pelo menos 32 caracteres")
     private String deviceApiKey;
 
+    /**
+     * Application ID da Custom Skill Alexa (amzn1.ask.skill...).
+     * Se preenchido, o POST /api/alexa só aceita pedidos dessa skill.
+     */
+    private String alexaSkillId = "";
+
     @Valid
     private RateLimit rateLimit = new RateLimit();
 
@@ -34,6 +40,14 @@ public class SecurityProperties {
 
     public void setDeviceApiKey(String deviceApiKey) {
         this.deviceApiKey = deviceApiKey;
+    }
+
+    public String getAlexaSkillId() {
+        return alexaSkillId;
+    }
+
+    public void setAlexaSkillId(String alexaSkillId) {
+        this.alexaSkillId = alexaSkillId;
     }
 
     public RateLimit getRateLimit() {

@@ -11,7 +11,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap"
         rel="stylesheet" />
-    <link rel="stylesheet" th:href="@{/style.css(v=8)}" />
+    <link rel="stylesheet" th:href="@{/style.css(v=13)}" />
 </head>
 
 <body>
@@ -21,6 +21,12 @@
             <div class="logo-icon"></div>
             <div class="logo-text">CASA<span>AUTOMÁTICA</span></div>
         </div>
+
+        <nav class="main-nav" aria-label="Navegação principal">
+            <a class="nav-link active" th:href="@{/}">Painel</a>
+            <a class="nav-link" th:href="@{/logs}">Logs</a>
+            <a class="nav-link" th:href="@{/cartoes}">Cartões</a>
+        </nav>
 
         <div class="header-right">
             <div class="status-badge">

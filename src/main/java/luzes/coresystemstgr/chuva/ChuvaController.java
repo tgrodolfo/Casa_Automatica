@@ -25,6 +25,12 @@ public class ChuvaController {
         return ResponseEntity.ok(service.obterEstado());
     }
 
+    @GetMapping("/momentos")
+    @Operation(summary = "Lista momentos de chuva (início e fim com data/hora)")
+    public ResponseEntity<?> listarMomentos() {
+        return ResponseEntity.ok(service.listarMomentosResposta());
+    }
+
     @PostMapping
     @Operation(summary = "Atualiza o estado da chuva (ESP32)")
     public ResponseEntity<Chuva> atualizarDoEsp(@RequestBody ChuvaUpdateRequest body) {

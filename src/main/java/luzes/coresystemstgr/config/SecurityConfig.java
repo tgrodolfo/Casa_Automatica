@@ -55,7 +55,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/login", "/error").permitAll()
                 .requestMatchers("/style.css", "/img/**", "/favicon.ico").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/alexa").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/chuva").hasAnyRole("DEVICE", "USER")
+                .requestMatchers(HttpMethod.POST, "/api/porta/entradas").hasAnyRole("DEVICE", "USER")
                 .requestMatchers(HttpMethod.GET, "/api/quartos").hasAnyRole("DEVICE", "USER")
                 .requestMatchers(HttpMethod.GET, "/api/portao").hasAnyRole("DEVICE", "USER")
                 .requestMatchers(HttpMethod.POST, "/api/portao/toggle").hasAnyRole("DEVICE", "USER")

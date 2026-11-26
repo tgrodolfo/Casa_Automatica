@@ -84,6 +84,41 @@ public class JanelaService {
         }
     }
 
+    public Janela abrirPorNome(String nome) {
+        verificarPodeAbrir();
+        Janela janela = buscarPorNome(nome);
+        janela.setState("open");
+        janela.setStatus("aberto");
+        return repository.save(janela);
+    }
+
+    public Janela fecharPorNome(String nome) {
+        Janela janela = buscarPorNome(nome);
+        janela.setState("closed");
+        janela.setStatus("fechado");
+        return repository.save(janela);
+    }
+
+    public Janela buscarPorNome(String nome) {
+        String alvo = normalizarNome(nome);
+        return listarTodos().stream()
+            .filter(j -> normalizarNome(j.getWindowName()).equals(alvo))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Janela não encontrada: " + nome));
+    }
+
+    private String normalizarNome(String nome) {
+        if (nome == null) {
+            return "";
+        }
+        return nome.trim().toLowerCase()
+            .replace("á", "a").replace("ã", "a").replace("â", "a")
+            .replace("é", "e").replace("ê", "e")
+            .replace("í", "i")
+            .replace("ó", "o").replace("ô", "o").replace("õ", "o")
+            .replace("ú", "u").replace("ç", "c");
+    }
+
     private void verificarPodeAbrir() {
         if (janelasBloqueadas()) {
             throw new JanelaBloqueadaPorChuvaException();

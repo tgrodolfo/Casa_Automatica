@@ -18,12 +18,22 @@ public class PortaoService {
     public Portao toggle() {
         Portao portao = obter();
         if ("open".equals(portao.getState())) {
-            portao.setState("closed");
-            portao.setStatus("fechado");
-        } else {
-            portao.setState("open");
-            portao.setStatus("aberto");
+            return fechar();
         }
+        return abrir();
+    }
+
+    public Portao abrir() {
+        Portao portao = obter();
+        portao.setState("open");
+        portao.setStatus("aberto");
+        return repository.save(portao);
+    }
+
+    public Portao fechar() {
+        Portao portao = obter();
+        portao.setState("closed");
+        portao.setStatus("fechado");
         return repository.save(portao);
     }
 

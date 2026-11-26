@@ -4,10 +4,27 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
+#include <time.h>
 
 #include "config.h"
 #include "esp_wroom_32_pins.h"
 #include "wifi_local.h"
+
+#ifndef FILA_ENTRADAS_MAX
+#define FILA_ENTRADAS_MAX 32
+#endif
+#ifndef INTERVALO_SYNC_ENTRADAS_MS
+#define INTERVALO_SYNC_ENTRADAS_MS 5000
+#endif
+#ifndef NTP_GMT_OFFSET_SEC
+#define NTP_GMT_OFFSET_SEC (-3 * 3600)
+#endif
+#ifndef NTP_DAYLIGHT_OFFSET_SEC
+#define NTP_DAYLIGHT_OFFSET_SEC 0
+#endif
+#ifndef PORTA_RFID_AUTO_FECHAR_MS
+#define PORTA_RFID_AUTO_FECHAR_MS 5000
+#endif
 
 #ifndef ENABLE_SAIDA_AUX
 #define ENABLE_SAIDA_AUX false
@@ -78,6 +95,7 @@ bool portaRfidAberta = false;
 int anguloPortaRfidAtual = ANGULO_PORTA_RFID_FECHADO;
 bool portaRfidAnexada = false;
 bool portaoAnexado = false;
+unsigned long portaRfidAbrirEm = 0;
 
 WiFiClientSecure secureClient;
 bool httpsPronto = false;
@@ -89,9 +107,20 @@ unsigned long ultimoEnvioChuva = 0;
 unsigned long ultimaSyncPortao = 0;
 unsigned long ultimaSyncJanelas = 0;
 unsigned long ultimaVerificacaoWifi = 0;
+unsigned long ultimaSyncEntradas = 0;
 static unsigned long proximaTentativaWifi = 0;
 static const unsigned long WIFI_BACKOFF_AUTH_MS = 60000;
 static volatile bool wifiAbortarTentativa = false;
+static bool ntpConfigurado = false;
+
+struct EntradaFilaItem {
+  char uid[17];
+  char ocorridoEm[20];
+  bool offline;
+};
+
+static EntradaFilaItem filaEntradas[FILA_ENTRADAS_MAX];
+static int filaEntradasQtd = 0;
 
 #if ENABLE_RFID
 MFRC522 leitorRfid(PIN_RFID_SS, PIN_RFID_RST);
@@ -541,6 +570,149 @@ void aplicarHeadersApi(HTTPClient& http) {
   http.addHeader(HDR_API_KEY, API_KEY);
 }
 
+void configurarNtp() {
+  if (ntpConfigurado || !wifiConectado()) {
+    return;
+  }
+  configTime(NTP_GMT_OFFSET_SEC, NTP_DAYLIGHT_OFFSET_SEC, "pool.ntp.org", "time.nist.gov");
+  ntpConfigurado = true;
+  logLinha("ntp: configurado (America/Sao_Paulo UTC-3)");
+}
+
+bool horaLocalIso(char* dest, size_t destLen) {
+  if (dest == nullptr || destLen < 20) {
+    return false;
+  }
+  time_t agora = time(nullptr);
+  if (agora < 1700000000) {
+    dest[0] = '\0';
+    return false;
+  }
+  struct tm info;
+  if (!localtime_r(&agora, &info)) {
+    dest[0] = '\0';
+    return false;
+  }
+  snprintf(
+    dest,
+    destLen,
+    "%04d-%02d-%02dT%02d:%02d:%02d",
+    info.tm_year + 1900,
+    info.tm_mon + 1,
+    info.tm_mday,
+    info.tm_hour,
+    info.tm_min,
+    info.tm_sec
+  );
+  return true;
+}
+
+String uidCartaoHex() {
+#if ENABLE_RFID
+  String uid;
+  for (byte i = 0; i < leitorRfid.uid.size; i++) {
+    if (leitorRfid.uid.uidByte[i] < 0x10) {
+      uid += '0';
+    }
+    uid += String(leitorRfid.uid.uidByte[i], HEX);
+  }
+  uid.toUpperCase();
+  return uid;
+#else
+  return String();
+#endif
+}
+
+bool enfileirarEntrada(const String& uid, const char* ocorridoEm, bool offline) {
+  if (filaEntradasQtd >= FILA_ENTRADAS_MAX) {
+    logLinha("fila entradas: CHEIA, descartando a mais antiga");
+    for (int i = 1; i < filaEntradasQtd; i++) {
+      filaEntradas[i - 1] = filaEntradas[i];
+    }
+    filaEntradasQtd--;
+  }
+
+  EntradaFilaItem& item = filaEntradas[filaEntradasQtd];
+  strncpy(item.uid, uid.c_str(), sizeof(item.uid) - 1);
+  item.uid[sizeof(item.uid) - 1] = '\0';
+  if (ocorridoEm != nullptr && ocorridoEm[0] != '\0') {
+    strncpy(item.ocorridoEm, ocorridoEm, sizeof(item.ocorridoEm) - 1);
+    item.ocorridoEm[sizeof(item.ocorridoEm) - 1] = '\0';
+  } else {
+    item.ocorridoEm[0] = '\0';
+  }
+  item.offline = offline;
+  filaEntradasQtd++;
+  logFmt("fila entradas: %d pendente(s)", filaEntradasQtd);
+  return true;
+}
+
+bool postEntradaPorta(const char* uid, const char* ocorridoEm, bool offline) {
+  if (!wifiConectado()) {
+    return false;
+  }
+
+  HTTPClient http;
+  if (!iniciarHttp(http, "/api/porta/entradas")) {
+    return false;
+  }
+
+  StaticJsonDocument<192> doc;
+  if (uid != nullptr && uid[0] != '\0') {
+    doc["cardUid"] = uid;
+  }
+  if (ocorridoEm != nullptr && ocorridoEm[0] != '\0') {
+    doc["ocorridoEm"] = ocorridoEm;
+  }
+  doc["offline"] = offline;
+
+  String body;
+  serializeJson(doc, body);
+  aplicarHeadersApi(http);
+  int code = http.POST(body);
+  encerrarHttp(http);
+
+  if (code == HTTP_CODE_OK || code == HTTP_CODE_CREATED) {
+    logLinha(offline ? "POST /api/porta/entradas (sync offline) ok" : "POST /api/porta/entradas ok");
+    return true;
+  }
+
+  logFmt("POST /api/porta/entradas falhou HTTP %d", code);
+  return false;
+}
+
+void registrarEntradaPorta(const String& uid) {
+  char iso[20];
+  bool temHora = horaLocalIso(iso, sizeof(iso));
+  const char* ocorrido = temHora ? iso : "";
+
+  if (postEntradaPorta(uid.c_str(), ocorrido, false)) {
+    return;
+  }
+
+  enfileirarEntrada(uid, ocorrido, true);
+  logLinha("entrada porta: sem net, guardado na fila local");
+}
+
+void sincronizarFilaEntradas() {
+  if (filaEntradasQtd == 0 || !wifiConectado()) {
+    return;
+  }
+
+  configurarNtp();
+
+  while (filaEntradasQtd > 0) {
+    EntradaFilaItem& item = filaEntradas[0];
+    if (!postEntradaPorta(item.uid, item.ocorridoEm, true)) {
+      break;
+    }
+    for (int i = 1; i < filaEntradasQtd; i++) {
+      filaEntradas[i - 1] = filaEntradas[i];
+    }
+    filaEntradasQtd--;
+  }
+}
+
 bool lerChuva() {
   digitalWrite(PIN_CHUVA_POWER, LOW);
   delay(10);
@@ -648,10 +820,23 @@ void moverPortaRfid(bool aberta) {
   escreverAngulo(servoPortaRfid, angulo, anguloPortaRfidAtual);
   portaRfidAberta = aberta;
   if (aberta) {
+    portaRfidAbrirEm = millis();
     logFmt("porta rfid aberta (%d graus)", angulo);
   } else {
+    portaRfidAbrirEm = 0;
     logFmt("porta rfid fechada (%d graus)", angulo);
   }
+}
+
+void processarAutoFecharPortaRfid() {
+  if (!portaRfidAberta || PORTA_RFID_AUTO_FECHAR_MS == 0) {
+    return;
+  }
+  if (millis() - portaRfidAbrirEm < PORTA_RFID_AUTO_FECHAR_MS) {
+    return;
+  }
+  logLinha("rfid: auto-fechando porta");
+  moverPortaRfid(false);
 }
 
 bool postChuva(bool chovendo) {
@@ -771,9 +956,11 @@ bool sincronizarJanelasDaApi() {
   return true;
 }
 
-void abrirPortaPorRfid() {
+void abrirPortaPorRfid(const String& uid) {
+  registrarEntradaPorta(uid);
   if (portaRfidAberta) {
-    logLinha("rfid: porta ja aberta");
+    portaRfidAbrirEm = millis();
+    logLinha("rfid: porta ja aberta, renovando auto-fechar");
     return;
   }
   logLinha("rfid: cartao lido, abrindo porta");
@@ -971,7 +1158,11 @@ void processarRfid() {
     return;
   }
 
-  abrirPortaPorRfid();
+  String uid = uidCartaoHex();
+  Serial.print(TAG);
+  Serial.print(" rfid uid=");
+  Serial.println(uid);
+  abrirPortaPorRfid(uid);
 
   leitorRfid.PICC_HaltA();
   leitorRfid.PCD_StopCrypto1();
@@ -1029,7 +1220,9 @@ void setup() {
     conectarWifi();
   }
   if (wifiConectado()) {
+    configurarNtp();
     sincronizarEstadoInicial();
+    sincronizarFilaEntradas();
   }
 
   logLinha("pronto");
@@ -1047,7 +1240,9 @@ void loop() {
     if (!estavaConectado) {
       conectarWifi();
       if (wifiConectado()) {
+        configurarNtp();
         sincronizarEstadoInicial();
+        sincronizarFilaEntradas();
       }
     }
   }
@@ -1059,8 +1254,14 @@ void loop() {
     sincronizarJanelas();
   }
 
+  if (agora - ultimaSyncEntradas >= INTERVALO_SYNC_ENTRADAS_MS) {
+    ultimaSyncEntradas = agora;
+    sincronizarFilaEntradas();
+  }
+
 #if ENABLE_RFID
   processarRfid();
+  processarAutoFecharPortaRfid();
 #endif
 
 #if ENABLE_LEDS_LUZES

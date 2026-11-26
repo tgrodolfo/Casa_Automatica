@@ -17,3 +17,6 @@ casa-automatica.security.user.name=admin
 casa-automatica.security.user.password=CHANGE_ME_MIN_12_CHARS
 casa-automatica.security.device-api-key=CHANGE_ME_DEVICE_KEY_MIN_32_CHARACTERS_LONG
 casa-automatica.security.rate-limit.requests-per-minute=120
+
+casa-automatica.security.alexa-skill-id=${CASA_AUTOMATICA_ALEXA_SKILL_ID:}
+

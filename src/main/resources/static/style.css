@@ -77,10 +77,53 @@
 
         .logo-text span { color: var(--accent); }
 
+        .main-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 16px;
+        }
+
+        .nav-link {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-decoration: none;
+            color: var(--muted);
+            border: 1px solid transparent;
+            padding: 8px 14px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--text);
+            border-color: var(--border);
+        }
+
+        .nav-link.active {
+            color: var(--accent);
+            border-color: var(--border);
+            background: rgba(240, 165, 0, 0.08);
+        }
+
         .header-right {
             display: flex;
             align-items: center;
             gap: 12px;
+            margin-left: auto;
+        }
+
+        @media (max-width: 720px) {
+            header {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            .main-nav {
+                order: 3;
+                width: 100%;
+                margin: 0;
+            }
         }
 
         .status-badge {
@@ -565,6 +608,216 @@
         }
 
         .toggle-switch.active::after { transform: translateX(26px); }
+
+        /* ── CALENDAR (logs) ── */
+        .calendar-nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .calendar-month-label {
+            min-width: 160px;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            letter-spacing: 0.08em;
+            color: var(--text);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .calendar-weekday {
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            padding: 6px 0;
+        }
+
+        .calendar-cell {
+            min-height: 64px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--card);
+            color: var(--text);
+            font-family: 'Rajdhani', sans-serif;
+            position: relative;
+        }
+
+        .calendar-cell.empty {
+            border-color: transparent;
+            background: transparent;
+        }
+
+        button.calendar-cell.day {
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 10px;
+            transition: border-color 0.2s ease, background 0.2s ease;
+        }
+
+        button.calendar-cell.day:hover {
+            border-color: var(--accent2);
+        }
+
+        button.calendar-cell.day.today {
+            box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.35);
+        }
+
+        button.calendar-cell.day.selected,
+        button.calendar-cell.day.has-logs.selected {
+            border-color: var(--accent);
+            background: rgba(240, 165, 0, 0.1);
+        }
+
+        button.calendar-cell.day.has-logs {
+            border-color: rgba(0, 212, 255, 0.45);
+        }
+
+        .calendar-day-number {
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+
+        .calendar-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent2);
+            align-self: flex-end;
+        }
+
+        .day-panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .day-panel-title {
+            font-size: 1rem;
+            margin-bottom: 12px;
+        }
+
+        .card-name-form {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .card-name-input {
+            flex: 1;
+            min-width: 160px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.95rem;
+            padding: 8px 12px;
+        }
+
+        .card-name-input:focus {
+            outline: none;
+            border-color: var(--accent2);
+        }
+
+        .card-name-save {
+            padding: 8px 14px;
+        }
+
+        .cards-help {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 900px) {
+            .day-panels {
+                grid-template-columns: 1fr;
+            }
+            .calendar-cell {
+                min-height: 52px;
+            }
+        }
+
+        /* ── EVENT LISTS (chuva / porta) ── */
+        .event-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .event-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 18px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            border-left: 3px solid var(--accent2);
+        }
+
+        .event-row.ongoing {
+            border-left-color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(240, 165, 0, 0.12);
+        }
+
+        .event-row.offline {
+            border-left-color: var(--danger);
+        }
+
+        .event-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        .event-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 18px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--muted);
+            letter-spacing: 0.04em;
+        }
+
+        .event-badge {
+            flex-shrink: 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.12em;
+            color: var(--accent2);
+            border: 1px solid var(--border);
+            padding: 6px 10px;
+            border-radius: 4px;
+        }
+
+        .event-row.ongoing .event-badge { color: var(--accent); }
+        .event-row.offline .event-badge { color: var(--danger); }
+
+        @media (max-width: 720px) {
+            .event-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
 
         /* ── LOADING ── */
         .loading {
